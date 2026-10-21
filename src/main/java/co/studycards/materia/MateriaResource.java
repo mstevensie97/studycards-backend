@@ -5,11 +5,13 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
+import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
@@ -42,21 +44,45 @@ public class MateriaResource {
     }
 
     /**
-     * HU003: eliminar una materia que el estudiante ya no va a seguir estudiando.
+     * HU003 + HU004: eliminar una materia.
      * DELETE /materias/{id}
-     * - 204 si se eliminó correctamente.
+     *
      * - 404 si la materia no existe.
+     * - 409 (advertencia) si tiene tarjetas y todavía NO se confirmó la eliminación.
+     *   La respuesta incluye cuántas tarjetas se perderían, para mostrarlo en el front.
+     * - 204 si se eliminó. Si tenía tarjetas, se envía ?confirmar=true y se
+     *   eliminan junto con la materia.
+     *
+     * HU005 (cancelar): si el usuario cancela, el front simplemente no vuelve a
+     * llamar con ?confirmar=true, así que la materia y sus tarjetas quedan intactas.
      */
     @DELETE
     @Path("/{id}")
     @Transactional
-    public Response eliminar(@PathParam("id") Long id) {
-        boolean eliminada = Materia.deleteById(id);
-        if (!eliminada) {
+    public Response eliminar(@PathParam("id") Long id,
+                             @QueryParam("confirmar") @DefaultValue("false") boolean confirmar) {
+        Materia materia = Materia.findById(id);
+        if (materia == null) {
             return Response.status(Response.Status.NOT_FOUND)
                     .entity(new ErrorResponse("Materia con id " + id + " no encontrada"))
                     .build();
         }
+
+        long totalTarjetas = Tarjeta.count("materia.id", id);
+
+        if (totalTarjetas > 0 && !confirmar) {
+            return Response.status(Response.Status.CONFLICT)
+                    .entity(new AdvertenciaResponse(
+                            "La materia tiene " + totalTarjetas
+                                    + " tarjeta(s) asociada(s). Si la eliminas, también se eliminarán.",
+                            totalTarjetas))
+                    .build();
+        }
+
+        if (totalTarjetas > 0) {
+            Tarjeta.delete("materia.id", id);
+        }
+        materia.delete();
         return Response.noContent().build();
     }
 
@@ -74,5 +100,11 @@ public class MateriaResource {
      * Respuesta estándar de error.
      */
     public record ErrorResponse(String mensaje) {
+    }
+
+    /**
+     * Respuesta de advertencia cuando la materia tiene tarjetas asociadas.
+     */
+    public record AdvertenciaResponse(String mensaje, long totalTarjetas) {
     }
 }
