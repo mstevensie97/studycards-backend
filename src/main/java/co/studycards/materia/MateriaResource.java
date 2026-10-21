@@ -1,5 +1,6 @@
 package co.studycards.materia;
 
+import io.quarkus.panache.common.Sort;
 import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -23,12 +24,23 @@ import java.util.List;
 public class MateriaResource {
 
     /**
-     * Listar todas las materias.
+     * HU006: listar las materias del estudiante, ordenadas por nombre.
+     * Por cada materia se devuelve el total de tarjetas y cuántas están
+     * pendientes de repaso, para decidir de un vistazo por dónde empezar.
      * GET /materias
      */
     @GET
-    public List<Materia> listar() {
-        return Materia.listAll();
+    public List<MateriaResumen> listar() {
+        List<Materia> materias = Materia.listAll(Sort.by("nombre"));
+        return materias.stream()
+                .map(m -> new MateriaResumen(
+                        m.id,
+                        m.nombre,
+                        m.descripcion,
+                        m.color,
+                        Tarjeta.count("materia.id", m.id),
+                        Tarjeta.count("materia.id = ?1 and nivelDominio = ?2", m.id, NivelDominio.REPASAR)))
+                .toList();
     }
 
     /**
@@ -46,15 +58,9 @@ public class MateriaResource {
     /**
      * HU003 + HU004: eliminar una materia.
      * DELETE /materias/{id}
-     *
-     * - 404 si la materia no existe.
-     * - 409 (advertencia) si tiene tarjetas y todavía NO se confirmó la eliminación.
-     *   La respuesta incluye cuántas tarjetas se perderían, para mostrarlo en el front.
-     * - 204 si se eliminó. Si tenía tarjetas, se envía ?confirmar=true y se
-     *   eliminan junto con la materia.
-     *
-     * HU005 (cancelar): si el usuario cancela, el front simplemente no vuelve a
-     * llamar con ?confirmar=true, así que la materia y sus tarjetas quedan intactas.
+     * - 404 si no existe.
+     * - 409 (advertencia) si tiene tarjetas y todavía no se confirmó.
+     * - 204 si se eliminó (con ?confirmar=true se eliminan también sus tarjetas).
      */
     @DELETE
     @Path("/{id}")
@@ -97,14 +103,19 @@ public class MateriaResource {
     }
 
     /**
-     * Respuesta estándar de error.
+     * Materia con sus contadores de tarjetas (HU006).
      */
+    public record MateriaResumen(Long id,
+                                 String nombre,
+                                 String descripcion,
+                                 String color,
+                                 long totalTarjetas,
+                                 long tarjetasPendientes) {
+    }
+
     public record ErrorResponse(String mensaje) {
     }
 
-    /**
-     * Respuesta de advertencia cuando la materia tiene tarjetas asociadas.
-     */
     public record AdvertenciaResponse(String mensaje, long totalTarjetas) {
     }
 }
