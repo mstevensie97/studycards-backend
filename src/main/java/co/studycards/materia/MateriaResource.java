@@ -24,9 +24,8 @@ import java.util.List;
 public class MateriaResource {
 
     /**
-     * HU006: listar las materias del estudiante, ordenadas por nombre.
-     * Por cada materia se devuelve el total de tarjetas y cuántas están
-     * pendientes de repaso, para decidir de un vistazo por dónde empezar.
+     * HU006: listar las materias del estudiante, ordenadas por nombre,
+     * con el total de tarjetas y las pendientes de repaso de cada una.
      * GET /materias
      */
     @GET
@@ -39,8 +38,28 @@ public class MateriaResource {
                         m.descripcion,
                         m.color,
                         Tarjeta.count("materia.id", m.id),
-                        Tarjeta.count("materia.id = ?1 and nivelDominio = ?2", m.id, NivelDominio.REPASAR)))
+                        contarPendientes(m.id)))
                 .toList();
+    }
+
+    /**
+     * HU007: ver el total de tarjetas pendientes de repaso de UNA materia.
+     * GET /materias/{id}/pendientes
+     * - 200 con el total de tarjetas y cuántas están pendientes.
+     * - 404 si la materia no existe.
+     */
+    @GET
+    @Path("/{id}/pendientes")
+    public Response pendientes(@PathParam("id") Long id) {
+        Materia materia = Materia.findById(id);
+        if (materia == null) {
+            return Response.status(Response.Status.NOT_FOUND)
+                    .entity(new ErrorResponse("Materia con id " + id + " no encontrada"))
+                    .build();
+        }
+        long total = Tarjeta.count("materia.id", id);
+        long pendientes = contarPendientes(id);
+        return Response.ok(new PendientesResponse(id, materia.nombre, total, pendientes)).build();
     }
 
     /**
@@ -93,8 +112,14 @@ public class MateriaResource {
     }
 
     /**
-     * DTO de entrada para crear materias.
+     * Cuenta las tarjetas de una materia que siguen pendientes de repaso.
+     * Se usa en el listado (HU006) y en el detalle (HU007) para que ambos
+     * den siempre el mismo número.
      */
+    private long contarPendientes(Long materiaId) {
+        return Tarjeta.count("materia.id = ?1 and nivelDominio = ?2", materiaId, NivelDominio.REPASAR);
+    }
+
     public static class MateriaRequest {
         @NotBlank(message = "El nombre es obligatorio")
         public String nombre;
@@ -102,15 +127,18 @@ public class MateriaResource {
         public String color;
     }
 
-    /**
-     * Materia con sus contadores de tarjetas (HU006).
-     */
     public record MateriaResumen(Long id,
                                  String nombre,
                                  String descripcion,
                                  String color,
                                  long totalTarjetas,
                                  long tarjetasPendientes) {
+    }
+
+    public record PendientesResponse(Long materiaId,
+                                     String nombre,
+                                     long totalTarjetas,
+                                     long tarjetasPendientes) {
     }
 
     public record ErrorResponse(String mensaje) {
