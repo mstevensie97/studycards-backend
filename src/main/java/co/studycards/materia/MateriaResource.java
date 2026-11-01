@@ -9,6 +9,7 @@ import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
+import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
@@ -72,6 +73,29 @@ public class MateriaResource {
         Materia materia = new Materia(request.nombre, request.descripcion, request.color);
         materia.persist();
         return Response.status(Response.Status.CREATED).entity(materia).build();
+    }
+
+    /**
+     * HU002: editar una materia (nombre, descripción y color).
+     * PUT /materias/{id}
+     * - 200 con la materia actualizada.
+     * - 400 si el nombre viene vacío.
+     * - 404 si la materia no existe.
+     */
+    @PUT
+    @Path("/{id}")
+    @Transactional
+    public Response actualizar(@PathParam("id") Long id, @Valid MateriaRequest request) {
+        Materia materia = Materia.findById(id);
+        if (materia == null) {
+            return Response.status(Response.Status.NOT_FOUND)
+                    .entity(new ErrorResponse("Materia con id " + id + " no encontrada"))
+                    .build();
+        }
+        materia.nombre = request.nombre;
+        materia.descripcion = request.descripcion;
+        materia.color = request.color;
+        return Response.ok(materia).build();
     }
 
     /**
