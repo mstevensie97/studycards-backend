@@ -8,6 +8,7 @@ import jakarta.validation.constraints.Size;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
+import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
@@ -25,6 +26,7 @@ public class TarjetaResource {
      * HU008: crear una tarjeta manual (pregunta y respuesta) dentro de una materia.
      * POST /materias/{materiaId}/tarjetas
      * - 201 con la tarjeta creada (nivelDominio inicia en REPASAR).
+     * - 400 si la pregunta o la respuesta están vacías o superan el largo permitido.
      * - 400 si la pregunta o la respuesta están vacías o superan el largo permitido.
      * - 404 si la materia no existe.
      */
@@ -65,6 +67,38 @@ public class TarjetaResource {
 
         return Response.ok(new ListadoTarjetasResponse(materia.id, materia.nombre, tarjetas.size(), tarjetas))
                 .build();
+    }
+
+    /**
+     * HU009: editar la pregunta y la respuesta de una tarjeta existente.
+     * PUT /materias/{materiaId}/tarjetas/{tarjetaId}
+     * - 200 con la tarjeta actualizada (el nivel de dominio no cambia).
+     * - 400 si la pregunta o la respuesta están vacías o superan el largo permitido.
+     * - 404 si la materia o la tarjeta no existen, o la tarjeta no es de esa materia.
+     */
+    @PUT
+    @Path("/{tarjetaId}")
+    @Transactional
+    public Response actualizar(@PathParam("materiaId") Long materiaId,
+                               @PathParam("tarjetaId") Long tarjetaId,
+                               @Valid TarjetaRequest request) {
+        Materia materia = Materia.findById(materiaId);
+        if (materia == null) {
+            return materiaNoEncontrada(materiaId);
+        }
+
+        Tarjeta tarjeta = Tarjeta.findById(tarjetaId);
+        if (tarjeta == null || !tarjeta.materia.id.equals(materiaId)) {
+            return Response.status(Response.Status.NOT_FOUND)
+                    .entity(new MateriaResource.ErrorResponse(
+                            "Tarjeta con id " + tarjetaId + " no encontrada en la materia " + materiaId))
+                    .build();
+        }
+
+        tarjeta.pregunta = request.pregunta.trim();
+        tarjeta.respuesta = request.respuesta.trim();
+
+        return Response.ok(TarjetaResponse.de(tarjeta)).build();
     }
 
     private Response materiaNoEncontrada(Long materiaId) {
