@@ -6,6 +6,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.PUT;
@@ -26,7 +27,6 @@ public class TarjetaResource {
      * HU008: crear una tarjeta manual (pregunta y respuesta) dentro de una materia.
      * POST /materias/{materiaId}/tarjetas
      * - 201 con la tarjeta creada (nivelDominio inicia en REPASAR).
-     * - 400 si la pregunta o la respuesta están vacías o superan el largo permitido.
      * - 400 si la pregunta o la respuesta están vacías o superan el largo permitido.
      * - 404 si la materia no existe.
      */
@@ -99,6 +99,34 @@ public class TarjetaResource {
         tarjeta.respuesta = request.respuesta.trim();
 
         return Response.ok(TarjetaResponse.de(tarjeta)).build();
+    }
+
+    /**
+     * HU010: eliminar una tarjeta individual.
+     * DELETE /materias/{materiaId}/tarjetas/{tarjetaId}
+     * - 204 si se eliminó (la materia y sus demás tarjetas no se tocan).
+     * - 404 si la materia o la tarjeta no existen, o la tarjeta no es de esa materia.
+     */
+    @DELETE
+    @Path("/{tarjetaId}")
+    @Transactional
+    public Response eliminar(@PathParam("materiaId") Long materiaId,
+                             @PathParam("tarjetaId") Long tarjetaId) {
+        Materia materia = Materia.findById(materiaId);
+        if (materia == null) {
+            return materiaNoEncontrada(materiaId);
+        }
+
+        Tarjeta tarjeta = Tarjeta.findById(tarjetaId);
+        if (tarjeta == null || !tarjeta.materia.id.equals(materiaId)) {
+            return Response.status(Response.Status.NOT_FOUND)
+                    .entity(new MateriaResource.ErrorResponse(
+                            "Tarjeta con id " + tarjetaId + " no encontrada en la materia " + materiaId))
+                    .build();
+        }
+
+        tarjeta.delete();
+        return Response.noContent().build();
     }
 
     private Response materiaNoEncontrada(Long materiaId) {
