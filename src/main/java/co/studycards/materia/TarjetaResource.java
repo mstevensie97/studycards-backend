@@ -131,6 +131,58 @@ public class TarjetaResource {
         return Response.noContent().build();
     }
 
+    /**
+     * HU020 + HU021: marcar una tarjeta como APRENDIDA o como REPASAR.
+     * PUT /materias/{materiaId}/tarjetas/{tarjetaId}/nivel
+     * Body: {"nivelDominio": "APRENDIDA"} o {"nivelDominio": "REPASAR"}
+     * - 200 con la tarjeta actualizada.
+     *   Al marcarla REPASAR queda vencida desde hoy, para que vuelva a salir
+     *   en las próximas sesiones de estudio (HU013).
+     * - 400 si el nivel no es APRENDIDA ni REPASAR.
+     * - 404 si la materia o la tarjeta no existen, o la tarjeta no es de esa materia.
+     */
+    @PUT
+    @Path("/{tarjetaId}/nivel")
+    @Transactional
+    public Response actualizarNivel(@PathParam("materiaId") Long materiaId,
+                                    @PathParam("tarjetaId") Long tarjetaId,
+                                    NivelRequest request) {
+        Materia materia = Materia.findById(materiaId);
+        if (materia == null) {
+            return materiaNoEncontrada(materiaId);
+        }
+
+        Tarjeta tarjeta = Tarjeta.findById(tarjetaId);
+        if (tarjeta == null || !tarjeta.materia.id.equals(materiaId)) {
+            return Response.status(Response.Status.NOT_FOUND)
+                    .entity(new MateriaResource.ErrorResponse(
+                            "Tarjeta con id " + tarjetaId + " no encontrada en la materia " + materiaId))
+                    .build();
+        }
+
+        NivelDominio nuevoNivel = null;
+        if (request != null && request.nivelDominio != null) {
+            try {
+                nuevoNivel = NivelDominio.valueOf(request.nivelDominio.trim().toUpperCase());
+            } catch (IllegalArgumentException e) {
+                nuevoNivel = null;
+            }
+        }
+        if (nuevoNivel == null) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(new MateriaResource.ErrorResponse(
+                            "El nivel de dominio debe ser APRENDIDA o REPASAR"))
+                    .build();
+        }
+
+        tarjeta.nivelDominio = nuevoNivel;
+        if (nuevoNivel == NivelDominio.REPASAR) {
+            tarjeta.fechaProximoRepaso = LocalDate.now();
+        }
+
+        return Response.ok(TarjetaResponse.de(tarjeta)).build();
+    }
+
     private Response materiaNoEncontrada(Long materiaId) {
         return Response.status(Response.Status.NOT_FOUND)
                 .entity(new MateriaResource.ErrorResponse("Materia con id " + materiaId + " no encontrada"))
@@ -145,6 +197,10 @@ public class TarjetaResource {
         @NotBlank(message = "La respuesta es obligatoria")
         @Size(max = 1000, message = "La respuesta no puede superar 1000 caracteres")
         public String respuesta;
+    }
+
+    public static class NivelRequest {
+        public String nivelDominio;
     }
 
     public record TarjetaResponse(Long id,
