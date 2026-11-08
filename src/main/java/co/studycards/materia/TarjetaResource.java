@@ -16,6 +16,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @Path("/materias/{materiaId}/tarjetas")
@@ -42,6 +43,7 @@ public class TarjetaResource {
         tarjeta.pregunta = request.pregunta.trim();
         tarjeta.respuesta = request.respuesta.trim();
         tarjeta.materia = materia;
+        tarjeta.fechaProximoRepaso = LocalDate.now().plusDays(Tarjeta.DIAS_PARA_REPASO);
         tarjeta.persist();
 
         return Response.status(Response.Status.CREATED).entity(TarjetaResponse.de(tarjeta)).build();
@@ -149,9 +151,11 @@ public class TarjetaResource {
                                   String pregunta,
                                   String respuesta,
                                   NivelDominio nivelDominio,
-                                  Long materiaId) {
+                                  Long materiaId,
+                                  LocalDate fechaProximoRepaso) {
         static TarjetaResponse de(Tarjeta t) {
-            return new TarjetaResponse(t.id, t.pregunta, t.respuesta, t.nivelDominio, t.materia.id);
+            return new TarjetaResponse(t.id, t.pregunta, t.respuesta, t.nivelDominio, t.materia.id,
+                    t.fechaProximoRepaso);
         }
     }
 
