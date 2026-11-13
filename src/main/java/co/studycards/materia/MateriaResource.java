@@ -131,6 +131,7 @@ public class MateriaResource {
         if (totalTarjetas > 0) {
             Tarjeta.delete("materia.id", id);
         }
+        RegistroEstudio.delete("materiaId", id);
         materia.delete();
         return Response.noContent().build();
     }

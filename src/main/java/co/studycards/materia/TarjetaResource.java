@@ -17,6 +17,7 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Path("/materias/{materiaId}/tarjetas")
@@ -127,6 +128,7 @@ public class TarjetaResource {
                     .build();
         }
 
+        RegistroEstudio.delete("tarjetaId", tarjetaId);
         tarjeta.delete();
         return Response.noContent().build();
     }
@@ -180,6 +182,17 @@ public class TarjetaResource {
             tarjeta.fechaProximoRepaso = LocalDate.now();
         }
 
+        // RQ-16: registrar la respuesta en el historial de estudio.
+        RegistroEstudio registro = new RegistroEstudio();
+        registro.materiaId = materiaId;
+        registro.tarjetaId = tarjetaId;
+        registro.resultado = nuevoNivel;
+        registro.tiempoSegundos =
+                (request.tiempoSegundos != null && request.tiempoSegundos >= 0)
+                        ? request.tiempoSegundos : null;
+        registro.fecha = LocalDateTime.now();
+        registro.persist();
+
         return Response.ok(TarjetaResponse.de(tarjeta)).build();
     }
 
@@ -201,6 +214,8 @@ public class TarjetaResource {
 
     public static class NivelRequest {
         public String nivelDominio;
+        /** RQ-16: segundos que tardó el estudiante en responder (opcional). */
+        public Integer tiempoSegundos;
     }
 
     public record TarjetaResponse(Long id,
