@@ -1,67 +1,87 @@
-# studycards-backend
+# StudyCards - Backend
 
-This project uses Quarkus, the Supersonic Subatomic Java Framework.
+API REST de **StudyCards**, una aplicación de tarjetas de estudio (flashcards) para Android.
+Proyecto de la materia Arquitectura de Software 2, Universidad Central.
 
-If you want to learn more about Quarkus, please visit its website: <https://quarkus.io/>.
+- **Stack:** Quarkus 3 (Java 21), Maven, Hibernate ORM con Panache, PostgreSQL.
+- **Frontend (Flutter):** repositorio `studycards-frontend`.
 
-## Running the application in dev mode
+## Requisitos
 
-You can run your application in dev mode that enables live coding using:
+- Java 21
+- Una base de datos PostgreSQL (local o en la nube)
 
-```shell script
-./mvnw quarkus:dev
+## Configuración de la base de datos
+
+Los datos de conexión **no están en el código**: se leen de variables de entorno.
+
+1. Copia `.env.example` como `.env` en la raíz del proyecto (ya está en el `.gitignore`).
+2. Completa `DB_URL`, `DB_USER` y `DB_PASSWORD`.
+    - **Nube (Render Postgres):** usa el host largo de la *External Database URL* y `?sslmode=require`.
+    - **Local:** si solo defines `DB_PASSWORD`, se conecta a `localhost:5432`, base `studycards`, usuario `postgres`.
+
+Las tablas se crean y actualizan solas al arrancar (Hibernate `database-generation=update`).
+
+## Ejecutar en desarrollo
+
+```
+./mvnw quarkus:dev        (en Windows: .\mvnw quarkus:dev)
 ```
 
-> **_NOTE:_**  Quarkus now ships with a Dev UI, which is available in dev mode only at <http://localhost:8080/q/dev/>.
+La API queda en `http://localhost:8080`. Quarkus lee el archivo `.env` automáticamente en modo desarrollo.
 
-## Packaging and running the application
+## Endpoints
 
-The application can be packaged using:
+### Materias
 
-```shell script
-./mvnw package
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/materias` | Lista las materias (orden alfabético) con total de tarjetas y pendientes |
+| POST | `/materias` | Crea una materia (`nombre` obligatorio, `descripcion` y `color` opcionales) |
+| PUT | `/materias/{id}` | Edita nombre, descripción y color |
+| DELETE | `/materias/{id}?confirmar=false` | Elimina una materia. Si tiene tarjetas y no se confirma, responde **409** con el total; con `confirmar=true` las elimina también |
+| GET | `/materias/{id}/pendientes` | Total de tarjetas y cuántas están pendientes de repaso |
+
+### Tarjetas
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/materias/{id}/tarjetas` | Lista las tarjetas de la materia |
+| POST | `/materias/{id}/tarjetas` | Crea una tarjeta (`pregunta` y `respuesta` obligatorias) |
+| PUT | `/materias/{id}/tarjetas/{tarjetaId}` | Edita pregunta y respuesta |
+| DELETE | `/materias/{id}/tarjetas/{tarjetaId}` | Elimina una tarjeta |
+| PUT | `/materias/{id}/tarjetas/{tarjetaId}/nivel` | Marca la tarjeta como `APRENDIDA` o `REPASAR` |
+
+### Sesión de estudio
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/materias/{id}/estudio` | Tarjetas a estudiar en orden aleatorio. Si hay tarjetas **vencidas** devuelve solo esas (`modo: VENCIDAS`); si no, toda la materia (`modo: ALEATORIO`) |
+
+**Regla de tarjetas vencidas:** una tarjeta nueva tiene 5 días para ser aprendida
+(`fechaProximoRepaso` = creación + 5 días). Está *vencida* si sigue en `REPASAR` y esa
+fecha es hoy o anterior (las que no tienen fecha también cuentan). Al marcar una tarjeta como
+`REPASAR`, queda vencida desde hoy.
+
+## Datos de demostración
+
+Con el backend encendido, el script `demo/cargar_datos_demo.py` carga 3 materias con tarjetas
+de ejemplo a través de la API (omite las que ya existen):
+
+```
+py demo/cargar_datos_demo.py
+py demo/cargar_datos_demo.py https://<url-del-backend>
 ```
 
-It produces the `quarkus-run.jar` file in the `target/quarkus-app/` directory.
-Be aware that it’s not an _über-jar_ as the dependencies are copied into the `target/quarkus-app/lib/` directory.
+## Flujo de trabajo (Git)
 
-The application is now runnable using `java -jar target/quarkus-app/quarkus-run.jar`.
+- `main`: versión estable.
+- `develop`: integración.
+- Una rama por historia de usuario, creada desde `develop` y con PR hacia `develop`:
+  `HU0X-nombre-backend`.
 
-If you want to build an _über-jar_, execute the following command:
+## Despliegue (Render)
 
-```shell script
-./mvnw package -Dquarkus.package.jar.type=uber-jar
-```
-
-The application, packaged as an _über-jar_, is now runnable using `java -jar target/*-runner.jar`.
-
-## Creating a native executable
-
-You can create a native executable using:
-
-```shell script
-./mvnw package -Dnative
-```
-
-Or, if you don't have GraalVM installed, you can run the native executable build in a container using:
-
-```shell script
-./mvnw package -Dnative -Dquarkus.native.container-build=true
-```
-
-You can then execute your native executable with: `./target/studycards-backend-1.0.0-SNAPSHOT-runner`
-
-If you want to learn more about building native executables, please consult <https://quarkus.io/guides/maven-tooling>.
-
-## Related Guides
-
-- REST ([guide](https://quarkus.io/guides/rest)): Build RESTful web services and APIs using Jakarta REST (formerly JAX-RS)
-- REST Jackson ([guide](https://quarkus.io/guides/rest#json-serialisation)): Jackson serialization support for Quarkus REST. This extension is not compatible with the quarkus-resteasy extension, or any of the extensions that depend on it
-
-## Provided Code
-
-### REST
-
-Easily start your REST Web Services
-
-[Related guide section...](https://quarkus.io/guides/getting-started-reactive#reactive-jax-rs-resources)
+El `Dockerfile` compila el proyecto con Maven y ejecuta la aplicación con una imagen ligera de Java.
+En el servicio de Render se definen las variables de entorno `DB_URL`, `DB_USER` y `DB_PASSWORD`
+(la variable `PORT` la asigna Render).
