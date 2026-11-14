@@ -12,6 +12,7 @@ import jakarta.ws.rs.POST;
 import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -52,18 +53,30 @@ public class TarjetaResource {
 
     /**
      * HU011: ver el listado completo de tarjetas de una materia.
-     * GET /materias/{materiaId}/tarjetas
-     * - 200 con la lista (vacía si aún no tiene tarjetas), ordenada por creación.
+     * RQ-13: buscar tarjetas de la materia por texto (en la pregunta o en la respuesta).
+     * GET /materias/{materiaId}/tarjetas            -> todas las tarjetas
+     * GET /materias/{materiaId}/tarjetas?q=texto    -> solo las que contienen el texto
+     * - 200 con la lista (vacía si no hay tarjetas o ninguna coincide), ordenada por creación.
      * - 404 si la materia no existe.
      */
     @GET
-    public Response listar(@PathParam("materiaId") Long materiaId) {
+    public Response listar(@PathParam("materiaId") Long materiaId, @QueryParam("q") String q) {
         Materia materia = Materia.findById(materiaId);
         if (materia == null) {
             return materiaNoEncontrada(materiaId);
         }
 
-        List<TarjetaResponse> tarjetas = Tarjeta.<Tarjeta>list("materia.id", Sort.by("id"), materiaId)
+        List<Tarjeta> encontradas;
+        if (q == null || q.isBlank()) {
+            encontradas = Tarjeta.list("materia.id", Sort.by("id"), materiaId);
+        } else {
+            String patron = "%" + q.trim().toLowerCase() + "%";
+            encontradas = Tarjeta.list(
+                    "materia.id = ?1 and (lower(pregunta) like ?2 or lower(respuesta) like ?2)",
+                    Sort.by("id"), materiaId, patron);
+        }
+
+        List<TarjetaResponse> tarjetas = encontradas
                 .stream()
                 .map(TarjetaResponse::de)
                 .toList();
